@@ -16,7 +16,7 @@ type Worker struct {
 func NewWorker(poolFa *GoroutinePool, ctx context.Context) *Worker {
 	return &Worker {
 		ctx: ctx,
-		TaskChannel: make(chan Task),
+		TaskChannel: make(chan Task, 1),
 		Pool: poolFa,
 	}
 }

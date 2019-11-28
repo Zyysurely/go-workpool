@@ -27,7 +27,7 @@ func NewGoroutinePool(cap int32) *GoroutinePool {
 	return &GoroutinePool {
 		Cap: cap,
 		WorkerQueue: make(chan *Worker, cap),
-		Closed: make(chan bool),
+		Closed: make(chan bool, 1),
 	}
 }
 
@@ -58,7 +58,6 @@ func (gp *GoroutinePool) Run() {
 	gp.ctx = ctx
 	// exitChan := make(chan os.Signal, 1)
 	// signal.Notify()
-	// fmt.Println("yes")
 	<-gp.Closed
 	fmt.Println("Pool need to exit~~~")
 	cancel()
@@ -66,6 +65,6 @@ func (gp *GoroutinePool) Run() {
 
 
 // goroutine池关闭
-func (gp *GoroutinePool) stop() {
+func (gp *GoroutinePool) Stop() {
 	gp.Closed <- true
 }

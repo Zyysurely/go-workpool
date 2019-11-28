@@ -12,6 +12,6 @@ func NewTask(f func() error) *Task {
 }
 
 func (t *Task) Run() error{
-	err := f()
+	err := t.f()
 	return err
 }

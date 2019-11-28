@@ -3,28 +3,31 @@ package pool
 
 type Worker struct {
     TaskChannel  chan Task
-    Closed        chan bool
+	Closed       chan bool
+	Pool		 *GoroutinePool   // owner
 }
 
-func NewWorker() *Worker {
+func NewWorker(poolFa *GoroutinePool, closed chan bool) *Worker {
 	return &Worker {
 		TaskChannel: make(chan Task),
-		Closed: make(chan bool),
+		Closed: closed,
+		Pool: poolFa,
 	}
 }
 
 // 启动一个worker池中的goroutine
-func (w *Worker) Start() {
+func (w *Worker) Run() {
+	// 启动goroutine
     go func() {
+		// 一直等待执行
         for {
             w.WorkerPool <- w.TaskChannel
             select {
-            case task := <-w.TaskChannel:
-                if err := job.Payload.UploadToS3(); err != nil {
-                    log.Errorf("Error uploading to S3: %s", err.Error())
-                }
-
-            case <-w.quit:
+			case task := <-w.TaskChannel:
+				task.Run()
+				w.Pool.WorkerQueue <- w
+			case <-w.Closed:
+				fmt.Println("task closed~~~")
                 // we have received a signal to stop
                 return
             }

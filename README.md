@@ -1,1 +1,1 @@
-> 实现了一个goroutine pool的简单demo，具体更多内容可查看
+> 实现了一个goroutine pool的简单demo，具体更多内容可查看blog https://zyysurely.github.io/2019/10/20/goroutine%E6%B1%A0/

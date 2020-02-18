@@ -8,9 +8,11 @@ import (
 
 
 type Worker struct {
+	isCore		 bool
 	ctx			 context.Context
-    TaskChannel  chan Task
-	Pool		 *GoroutinePool   // owner
+    TaskChannel  chan Task        // handle task
+	Pool		 *GoroutinePool   // Pool owner
+	recycleTime  time.Time
 }
 
 func NewWorker(poolFa *GoroutinePool, ctx context.Context) *Worker {
@@ -31,11 +33,12 @@ func (w *Worker) Run() {
 				case task := <-w.TaskChannel:
 					task.Run()
 					w.Pool.WorkerQueue <- w
-					atomic.AddInt32(&w.Pool.freeRunning, 1)
+					w.Pool.
 				case <-w.ctx.Done():
 					fmt.Println("task closed~~~")
 					// we have received a signal to stop
 					return
+				case
             }
         }
     }()

@@ -1,17 +1,30 @@
 package GoWorkPool
 
 import (
-	"sync"
+	// "sync"
 	"testing"
 	"time"
+	pool "project/pool"
+	// "os/signal"
+	// "os"
 )
 
 var (
-	times = 100
+	times = 10000
+	DefaultGoroutinePoolSize = 100
+	DefaultBlockingTasks = 100
+	DefaultExpiredTime = 10 * time.Second
+	DefaultOptions = &OptionalPara {
+		ExpiryDuration: time.Duration(DefaultExpiredTime),
+		MaxBlockingTasks: DefaultBlockingTasks,
+		Nonblocking: false,
+	}
+	defaultGoroutinePool = NewGoroutinePool(DefaultAntsPoolSize, 0.5*DefaultAntsPoolSize, DefaultOptions)
 )
 
-func demo() {
+func demo() error{
 	time.Sleep(time.Duration(10) * time.Millisecond)
+	return nil
 }
 
 // with origin goroutine schedule
@@ -29,34 +42,21 @@ func BenchmarkGoroutines(b *testing.B) {
 	}
 }
 
-// with newly
+// with newly goroutinePool
 func BenchmarkWorkPool(b *testing.B) {
-	t := gp.NewTask(
-		func() error {
-			// fmt.Println(time.Now())
-			// 耗时代表
-			time.Sleep(5000)
-			return nil
-		})
-
-	p := gp.NewGoroutinePool(4)
-	exitChan := make(chan os.Signal, 1)
-	signal.Notify(exitChan, os.Interrupt, os.Kill)
-	exitFlag := make(chan bool, 1)
-	go func() {
-		for {
-			select {
-			case <-exitFlag:
-				break
-			default:
-				p.AddSingleTask(t)
-			}
+	t := pool.NewTask(demo)
+	for i := 0; i < b.N; i++ {
+		wg.Add(times)
+		for j := 0; j < times; j++ {
+			defaultGoroutinePool.Submit(
+				pool.NewTask(
+				func() error {
+					err := demo()
+					wg.Done()
+					return err
+				}))
 		}
-		fmt.Println("sendStop")
-	}()
-	p.Run()
-	<-exitChan
-	fmt.Println("os want to stop")
-	exitFlag <- true
+		wg.Wait()
+	}
 	p.Stop()
 }

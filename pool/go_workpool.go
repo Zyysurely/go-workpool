@@ -171,6 +171,10 @@ func (gp *GoroutinePool) DecBlocking() {
 // 	return w
 // }
 
+func (gp *GoroutinePool) clearWorker() {
+	
+}
+
 func (gp *GoroutinePool) dispatch() {
 	for {
 		select {

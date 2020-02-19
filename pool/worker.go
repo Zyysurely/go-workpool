@@ -14,6 +14,7 @@ type Worker struct {
 	Pool		   *GoroutinePool    // Pool owner
 	recycleTime    time.Time        
 	completedTasks int64
+	timer		    time.Timer
 }
 
 func NewWorker(isCore bool, ctx context.Context, pool *GoroutinePool) *Worker {
@@ -54,27 +55,24 @@ func (w *Worker) Run() {
 			}
 		}()
 		
-		// 清理定时器
+		// // 清理定时器
 		// if !w.isCore {
-		// 	timer1 := time.NewTimer(2 * time.Second)
+		// 	timer := time.NewTimer(2 * time.Second)
 		// }
 
-		for {
-			select {
-			case task := w.TaskChannel:
-				if task == nil {
-					// log.Println("worker exits")
-					w.Pool.DecRunning()
-					return
-				}
-				err := w.completeTask(task)
-				if err!= nil {
-					log.Println("worker exits")
-					w.Pool.DecRunning()
-					return
-				}
-				w.Pool.FreeWorker(w)
+		for task := range w.TaskChannel {
+			if task == nil {
+				// log.Println("worker exits")
+				w.Pool.DecRunning()
+				return
 			}
+			err := w.completeTask(task)
+			if err!= nil {
+				log.Println("worker exits")
+				w.Pool.DecRunning()
+				return
+			}
+			w.Pool.FreeWorker(w)
 		}
 		// // 弃用channel传递的方法，因为channel吞吐和select的操作效率并不高，并且一直监听taskqueue的效也是比较低的，改为放池中的状态
 		// // getTask()

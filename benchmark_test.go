@@ -1,25 +1,27 @@
 package GoWorkPool
 
 import (
-	// "sync"
+	"sync"
 	"testing"
 	"time"
 	pool "project/pool"
 	// "os/signal"
 	// "os"
+	"context"
+	"log"
 )
 
 var (
-	times = 10000
-	DefaultGoroutinePoolSize = 100
-	DefaultBlockingTasks = 100
+	times = 1000000
+	DefaultGoroutinePoolSize = int64(200000)
+	DefaultBlockingTasks = int64(1000000)
 	DefaultExpiredTime = 10 * time.Second
-	DefaultOptions = &OptionalPara {
+	DefaultOptions = &pool.OptionalPara {
 		ExpiryDuration: time.Duration(DefaultExpiredTime),
-		MaxBlockingTasks: DefaultBlockingTasks,
+		MaxBlockingTasks: int64(DefaultBlockingTasks),
 		Nonblocking: false,
 	}
-	defaultGoroutinePool = NewGoroutinePool(DefaultAntsPoolSize, 0.5*DefaultAntsPoolSize, DefaultOptions)
+	defaultGoroutinePool = pool.NewGoroutinePool(DefaultGoroutinePoolSize, DefaultGoroutinePoolSize, DefaultOptions)
 )
 
 func demo() error{
@@ -44,7 +46,12 @@ func BenchmarkGoroutines(b *testing.B) {
 
 // with newly goroutinePool
 func BenchmarkWorkPool(b *testing.B) {
-	t := pool.NewTask(demo)
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancel(context.Background())
+	defaultGoroutinePool.Ctx = ctx
+	// defer defaultGoroutinePool.Stop()
+
+	// b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		wg.Add(times)
 		for j := 0; j < times; j++ {
@@ -58,5 +65,7 @@ func BenchmarkWorkPool(b *testing.B) {
 		}
 		wg.Wait()
 	}
-	p.Stop()
+	log.Printf("Pool exit signal recieved~~~")
+	cancel()
+	// b.StopTimer()
 }

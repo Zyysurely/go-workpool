@@ -8,12 +8,10 @@ import (
 	"context"
 	// "os/signal"
 	"log"
-	"time"
 )
 
-type PoolState int
 const (
-	RUNNING PoolState = iota
+	RUNNING   = iota
 	SHUTDOWN
 	STOP 
 	TERMINATED
@@ -23,11 +21,11 @@ const (
 type GoroutinePool struct {
 	sync.Mutex                         // lock
 
-	state           int       		   // goroutine pool state
-	ctx				context.Context    // exit 
+	state           int32       	   // goroutine pool state
+	Ctx				context.Context    // exit 
 	maxPoolSize		int64              // max num of created goroutine
 	corePoolSize    int64              // core num   
-	workerQueue		chan *Worker       // work routine channel
+	workerQueue		*workerQueue       // running worker Queue
 	taskQueue		chan *Task         // task channel
 	workCount		int64              // work routine num
 	blockCount      int64              // limit the throughput
@@ -41,7 +39,7 @@ func NewGoroutinePool(cap int64, core int64, option *OptionalPara) *GoroutinePoo
 	res := &GoroutinePool {
 		maxPoolSize: cap,
 		corePoolSize: core,
-		workerQueue: make(chan *Worker, cap),
+		workerQueue: NewWorkerQueue(cap),
 		taskQueue: make(chan *Task, option.MaxBlockingTasks),
 		closed: make(chan bool, 1),
 		option: option,
@@ -56,7 +54,7 @@ func (gp *GoroutinePool) Submit(task *Task) error{
 		return ErrPoolClosed
 	}
 	// <= corePoolSize
-	if gp.running() <= gp.corePoolSize {
+	if gp.running() < gp.corePoolSize {
 		gp.addWorker(task)
 		return nil
 	}
@@ -77,17 +75,19 @@ func (gp *GoroutinePool) Submit(task *Task) error{
 
 // addWorker()
 func (gp *GoroutinePool) addWorker(task *Task) {
-	w := NewWorker(true, gp.ctx, gp)
-	gp.workerQueue <- w
+	w := NewWorker(true, gp.Ctx, gp)
+	gp.Lock()
+	gp.workerQueue.add(w)
+	gp.Unlock()
 	gp.increRunning()
-	w.TaskChannel <- *task
+	w.TaskChannel <- task
 	w.Run()
 }
 
 // start goroutine pool
 func (gp *GoroutinePool) Run() {
 	ctx, cancel := context.WithCancel(context.Background())
-	gp.ctx = ctx
+	gp.Ctx = ctx
 	// exitChan := make(chan os.Signal, 1)
 	// signal.Notify()
 	<-gp.closed
@@ -124,7 +124,7 @@ func (gp *GoroutinePool) running() int64{
 }
 
 func (gp *GoroutinePool) isRunning() bool{
-	if atomic.LoadInt64(&gp.state) == SHUTDOWN || atomic.LoadInt32(&gp.state) == STOP {
+	if atomic.LoadInt32(&gp.state) == SHUTDOWN || atomic.LoadInt32(&gp.state) == STOP {
 		return false
 	}
 	return true
@@ -136,6 +136,10 @@ func (gp *GoroutinePool) increRunning() {
 
 func (gp *GoroutinePool) DecRunning() {
 	atomic.AddInt64(&gp.workCount, -1)
+}
+
+func (gp *GoroutinePool) Blocking() int64{
+	return atomic.LoadInt64(&gp.blockCount);
 }
 
 func (gp *GoroutinePool) IncreBlocking() {

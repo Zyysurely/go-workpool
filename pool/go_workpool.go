@@ -23,8 +23,8 @@ type GoroutinePool struct {
 	Ctx				context.Context    // exit 
 	maxPoolSize		int64              // max num of created goroutine
 	corePoolSize    int64              // core num
-	workerQueue		chan *Worker       // running worker Queue with no task for dispach
-	// workerQueue		*workerQueue   // running worker Queue
+	// workerQueue		chan *Worker       // running worker Queue with no task for dispach
+	workerQueue		*workerQueue       // running worker Queue
 	taskQueue		chan *Task         // task channel
 	workCount		int64              // work routine num
 	blockCount      int64              // limit the throughput
@@ -39,12 +39,13 @@ func NewGoroutinePool(cap int64, core int64, option *OptionalPara) *GoroutinePoo
 	res := &GoroutinePool {
 		maxPoolSize: cap,
 		corePoolSize: core,
-		workerQueue: make(chan *Worker, cap),
-		// workerQueue: NewWorkerQueue(cap),
+		// workerQueue: make(chan *Worker, cap),
+		workerQueue: NewWorkerQueue(cap),
 		taskQueue: make(chan *Task, option.MaxBlockingTasks),
 		closed: make(chan bool, 1),
 		option: option,
 	}
+
 	// handle blocking task
 	go res.dispatch()
 	return res
@@ -77,11 +78,11 @@ func (gp *GoroutinePool) Submit(task *Task) error{
 
 // freeWorker()
 func (gp *GoroutinePool) FreeWorker(worker *Worker) error {
-	// gp.Lock()
-	// gp.workerQueue.add(worker)
-	// // gp.cond.Signal()
-	// gp.Unlock()
-	gp.workerQueue <- worker
+	gp.Lock()
+	gp.workerQueue.add(worker)
+	gp.cond.Signal()
+	gp.Unlock()
+	// gp.workerQueue <- worker
 	return nil
 }
 
@@ -106,12 +107,29 @@ func (gp *GoroutinePool) Stop() {
 
 // TODO: clears expired workers
 func (gp *GoroutinePool) clearExpired() {
-	// heartBeat := time.NewTicker()
-	// defer heartBeat.Stop()
-	
-	// for range heartBeat.C {
+	// heartbeat := time.NewTicker(p.options.ExpiryDuration)
+	// defer heartbeat.Stop()
 
-	// }
+	// for range heartbeat.C {
+	// 	if atomic.LoadInt32(&p.state) == CLOSED {
+	// 		break
+	// 	}
+
+	// 	p.lock.Lock()
+	// 	expiredWorkers := p.workers.retrieveExpiry(p.options.ExpiryDuration)
+	// 	p.lock.Unlock()
+
+	
+	// 	for i := range expiredWorkers {
+	// 		expiredWorkers[i].task <- nil
+	// 	}
+
+	// 	// There might be a situation that all workers have been cleaned up(no any worker is running)
+	// 	// while some invokers still get stuck in "p.cond.Wait()",
+	// 	// then it ought to wakes all those invokers.
+	// 	if p.Running() == 0 {
+	// 		p.cond.Broadcast()
+	// 	}
 }
 
 // ----------------------------------------------
@@ -154,22 +172,22 @@ func (gp *GoroutinePool) DecBlocking() {
 // channel with dispach 
 // ----------------------------------------------
 // need not think about the limit
-// func (gp *GoroutinePool) getWorker() *Worker{
-// 	gp.Lock()
-// 	w := gp.workerQueue.poll()
-// 	if w != nil {
-// 		gp.Unlock();
-// 		return w
-// 	}
-// 	// if gp.running() < gp.maxPoolSize {
-// 	// 	gp.Unlock();
-// 	// 	gp.addWorker(nil)
-// 	// }
-// 	gp.cond.Wait()
-// 	w = gp.workerQueue.poll()
-// 	gp.Unlock()
-// 	return w
-// }
+func (gp *GoroutinePool) getWorker() *Worker{
+	gp.Lock()
+	w := gp.workerQueue.poll()
+	if w != nil {
+		gp.Unlock();
+		return w
+	}
+	// if gp.running() < gp.maxPoolSize {
+	// 	gp.Unlock();
+	// 	gp.addWorker(nil)
+	// }
+	gp.cond.Wait()
+	w = gp.workerQueue.poll()
+	gp.Unlock()
+	return w
+}
 
 func (gp *GoroutinePool) dispatch() {
 	for {
@@ -181,12 +199,12 @@ func (gp *GoroutinePool) dispatch() {
 			select {
 			case task := <-gp.taskQueue:
 				// handle task blocking in queue
-				// gp.DecBlocking();
-				// w := gp.getWorker()
-				// w.TaskChannel <- task
 				gp.DecBlocking();
-				worker := <-gp.workerQueue
-				worker.TaskChannel <- task
+				w := gp.getWorker()
+				w.TaskChannel <- task
+				// gp.DecBlocking();
+				// worker := <-gp.workerQueue
+				// worker.TaskChannel <- task
 			case <- gp.closed:
 				log.Printf("Dispatch exits~~~")
 				return

@@ -12,7 +12,7 @@ import (
 )
 
 var (
-	times = 1000000
+	times = 10000
 	DefaultGoroutinePoolSize = int64(200000)
 	DefaultBlockingTasks = int64(1000000)
 	DefaultExpiredTime = 10 * time.Second
@@ -49,7 +49,7 @@ func BenchmarkGoroutinePool(b *testing.B) {
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	defaultGoroutinePool.Ctx = ctx
-	defer defaultGoroutinePool.Stop()
+	// defer defaultGoroutinePool.Stop()
 
 	// b.StartTimer()
 	for i := 0; i < b.N; i++ {

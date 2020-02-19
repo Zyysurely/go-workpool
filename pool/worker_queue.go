@@ -1,5 +1,7 @@
 package pool
 
+
+// not channel type worker queue
 type workerQueue struct {
 	workers	[]*Worker
 	expiry  []*Worker

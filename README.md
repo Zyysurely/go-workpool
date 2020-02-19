@@ -1,1 +1,1 @@
-> 基于ThreadPoolExecutor（Java) 实现了一个goroutine pool，具体更多内容可查看blog https://zyysurely.github.io/2019/10/20/goroutine%E6%B1%A0/
+> 基于ThreadPoolExecutor（Java) 和golang的特性实现了一个goroutine pool，具体更多内容可查看blog https://zyysurely.github.io/2019/10/20/goroutine%E6%B1%A0/

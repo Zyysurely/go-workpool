@@ -12,9 +12,7 @@ import (
 
 const (
 	RUNNING   = iota
-	SHUTDOWN
-	STOP 
-	TERMINATED
+	CLOSED
 )
 
 
@@ -24,33 +22,37 @@ type GoroutinePool struct {
 	state           int32       	   // goroutine pool state
 	Ctx				context.Context    // exit 
 	maxPoolSize		int64              // max num of created goroutine
-	corePoolSize    int64              // core num   
-	workerQueue		*workerQueue       // running worker Queue
+	corePoolSize    int64              // core num
+	// workerQueue		chan *Worker       // running worker Queue with no task for dispach
+	workerQueue		*workerQueue   // running worker Queue
 	taskQueue		chan *Task         // task channel
 	workCount		int64              // work routine num
 	blockCount      int64              // limit the throughput
-	once			sync.Once          // ensure close once
+	// once			sync.Once          // ensure close once
 	option			*OptionalPara	   // including 
 
 	closed          chan bool          // close signal
+	cond            *sync.Cond         // wait for an idle worker
 }
 
 func NewGoroutinePool(cap int64, core int64, option *OptionalPara) *GoroutinePool {
 	res := &GoroutinePool {
 		maxPoolSize: cap,
 		corePoolSize: core,
+		// workerQueue: make(chan *Worker, cap),
 		workerQueue: NewWorkerQueue(cap),
 		taskQueue: make(chan *Task, option.MaxBlockingTasks),
 		closed: make(chan bool, 1),
 		option: option,
 	}
-	// go res.clearExpired()
+	// handle blocking task
+	go res.dispatch()
 	return res
 }
 
 // submit task to the pool with error back
 func (gp *GoroutinePool) Submit(task *Task) error{
-	if !gp.isRunning() {
+	if !gp.IsRunning() {
 		return ErrPoolClosed
 	}
 	// <= corePoolSize
@@ -73,40 +75,36 @@ func (gp *GoroutinePool) Submit(task *Task) error{
 	return ErrPoolOverload
 }
 
+// freeWorker()
+func (gp *GoroutinePool) FreeWorker(worker *Worker) error {
+	gp.Lock()
+	gp.workerQueue.add(worker)
+	// gp.cond.Signal()
+	gp.Unlock()
+	return nil
+}
+
 // addWorker()
 func (gp *GoroutinePool) addWorker(task *Task) {
 	w := NewWorker(true, gp.Ctx, gp)
+	// gp.workerQueue <- w
 	gp.Lock()
 	gp.workerQueue.add(w)
 	gp.Unlock()
 	gp.increRunning()
-	w.TaskChannel <- task
+	if task != nil {
+		w.TaskChannel <- task
+	}
 	w.Run()
 }
 
-// start goroutine pool
-func (gp *GoroutinePool) Run() {
-	ctx, cancel := context.WithCancel(context.Background())
-	gp.Ctx = ctx
-	// exitChan := make(chan os.Signal, 1)
-	// signal.Notify()
-	<-gp.closed
-	log.Printf("Pool exit signal recieved~~~")
-	cancel()
-}
-
-
 // Stop()
 func (gp *GoroutinePool) Stop() {
+	atomic.StoreInt32(&gp.state, CLOSED)
 	gp.closed <- true
 }
 
-// Terminate()
-func (gp *GoroutinePool) Terminate() {
-	gp.closed <- true
-}
-
-// clears expired workers
+// TODO: clears expired workers
 func (gp *GoroutinePool) clearExpired() {
 	// heartBeat := time.NewTicker()
 	// defer heartBeat.Stop()
@@ -123,8 +121,8 @@ func (gp *GoroutinePool) running() int64{
 	return atomic.LoadInt64(&gp.workCount);
 }
 
-func (gp *GoroutinePool) isRunning() bool{
-	if atomic.LoadInt32(&gp.state) == SHUTDOWN || atomic.LoadInt32(&gp.state) == STOP {
+func (gp *GoroutinePool) IsRunning() bool{
+	if atomic.LoadInt32(&gp.state) == CLOSED {
 		return false
 	}
 	return true
@@ -148,5 +146,51 @@ func (gp *GoroutinePool) IncreBlocking() {
 
 func (gp *GoroutinePool) DecBlocking() {
 	atomic.AddInt64(&gp.blockCount, -1)
+}
+// ----------------------------------------------
+
+
+// ----------------------------------------------
+// channel with dispach 
+// ----------------------------------------------
+// need not think about the limit
+func (gp *GoroutinePool) getWorker() *Worker{
+	gp.Lock()
+	w := gp.workerQueue.poll()
+	if w != nil {
+		gp.Unlock();
+		return w
+	}
+	// if gp.running() < gp.maxPoolSize {
+	// 	gp.Unlock();
+	// 	gp.addWorker(nil)
+	// }
+	gp.cond.Wait()
+	w = gp.workerQueue.poll()
+	gp.Unlock()
+	return w
+}
+
+func (gp *GoroutinePool) dispatch() {
+	for {
+		select {
+		case <- gp.closed:
+			log.Printf("Dispatch exits~~~")
+			return
+		default:
+			select {
+			case task := <-gp.taskQueue:
+				// handle task blocking in queue
+				gp.DecBlocking();
+				w := gp.getWorker()
+				w.TaskChannel <- task
+				// worker := <-gp.workerQueue
+				// worker.TaskChannel <- task
+			case <- gp.closed:
+				log.Printf("Dispatch exits~~~")
+				return
+			}
+		}
+	}
 }
 // ----------------------------------------------

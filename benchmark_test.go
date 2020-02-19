@@ -49,7 +49,7 @@ func BenchmarkWorkPool(b *testing.B) {
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	defaultGoroutinePool.Ctx = ctx
-	// defer defaultGoroutinePool.Stop()
+	defer defaultGoroutinePool.Stop()
 
 	// b.StartTimer()
 	for i := 0; i < b.N; i++ {

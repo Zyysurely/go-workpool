@@ -45,7 +45,7 @@ func BenchmarkGoroutines(b *testing.B) {
 }
 
 // with newly goroutinePool
-func BenchmarkWorkPool(b *testing.B) {
+func BenchmarkGoroutinePool(b *testing.B) {
 	var wg sync.WaitGroup
 	ctx, cancel := context.WithCancel(context.Background())
 	defaultGoroutinePool.Ctx = ctx

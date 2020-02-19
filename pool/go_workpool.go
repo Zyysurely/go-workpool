@@ -23,8 +23,8 @@ type GoroutinePool struct {
 	Ctx				context.Context    // exit 
 	maxPoolSize		int64              // max num of created goroutine
 	corePoolSize    int64              // core num
-	// workerQueue		chan *Worker       // running worker Queue with no task for dispach
-	workerQueue		*workerQueue   // running worker Queue
+	workerQueue		chan *Worker       // running worker Queue with no task for dispach
+	// workerQueue		*workerQueue   // running worker Queue
 	taskQueue		chan *Task         // task channel
 	workCount		int64              // work routine num
 	blockCount      int64              // limit the throughput
@@ -39,8 +39,8 @@ func NewGoroutinePool(cap int64, core int64, option *OptionalPara) *GoroutinePoo
 	res := &GoroutinePool {
 		maxPoolSize: cap,
 		corePoolSize: core,
-		// workerQueue: make(chan *Worker, cap),
-		workerQueue: NewWorkerQueue(cap),
+		workerQueue: make(chan *Worker, cap),
+		// workerQueue: NewWorkerQueue(cap),
 		taskQueue: make(chan *Task, option.MaxBlockingTasks),
 		closed: make(chan bool, 1),
 		option: option,
@@ -57,7 +57,7 @@ func (gp *GoroutinePool) Submit(task *Task) error{
 	}
 	// <= corePoolSize
 	if gp.running() < gp.corePoolSize {
-		gp.addWorker(task)
+		gp.addWorker(true, task)
 		return nil
 	}
 	// add task to blockQueue
@@ -68,7 +68,7 @@ func (gp *GoroutinePool) Submit(task *Task) error{
 	}
 	// blockQueue is full, max
 	if gp.running() < gp.maxPoolSize {
-		gp.addWorker(task)
+		gp.addWorker(false, task)
 		return nil
 	}
 	// reject
@@ -77,20 +77,20 @@ func (gp *GoroutinePool) Submit(task *Task) error{
 
 // freeWorker()
 func (gp *GoroutinePool) FreeWorker(worker *Worker) error {
-	gp.Lock()
-	gp.workerQueue.add(worker)
-	// gp.cond.Signal()
-	gp.Unlock()
+	// gp.Lock()
+	// gp.workerQueue.add(worker)
+	// // gp.cond.Signal()
+	// gp.Unlock()
+	gp.workerQueue <- worker
 	return nil
 }
 
 // addWorker()
-func (gp *GoroutinePool) addWorker(task *Task) {
-	w := NewWorker(true, gp.Ctx, gp)
-	// gp.workerQueue <- w
-	gp.Lock()
-	gp.workerQueue.add(w)
-	gp.Unlock()
+func (gp *GoroutinePool) addWorker(core bool, task *Task) {
+	w := NewWorker(core, gp.Ctx, gp)
+	// gp.Lock()
+	// gp.workerQueue.add(w)
+	// gp.Unlock()
 	gp.increRunning()
 	if task != nil {
 		w.TaskChannel <- task
@@ -154,22 +154,22 @@ func (gp *GoroutinePool) DecBlocking() {
 // channel with dispach 
 // ----------------------------------------------
 // need not think about the limit
-func (gp *GoroutinePool) getWorker() *Worker{
-	gp.Lock()
-	w := gp.workerQueue.poll()
-	if w != nil {
-		gp.Unlock();
-		return w
-	}
-	// if gp.running() < gp.maxPoolSize {
-	// 	gp.Unlock();
-	// 	gp.addWorker(nil)
-	// }
-	gp.cond.Wait()
-	w = gp.workerQueue.poll()
-	gp.Unlock()
-	return w
-}
+// func (gp *GoroutinePool) getWorker() *Worker{
+// 	gp.Lock()
+// 	w := gp.workerQueue.poll()
+// 	if w != nil {
+// 		gp.Unlock();
+// 		return w
+// 	}
+// 	// if gp.running() < gp.maxPoolSize {
+// 	// 	gp.Unlock();
+// 	// 	gp.addWorker(nil)
+// 	// }
+// 	gp.cond.Wait()
+// 	w = gp.workerQueue.poll()
+// 	gp.Unlock()
+// 	return w
+// }
 
 func (gp *GoroutinePool) dispatch() {
 	for {
@@ -181,11 +181,12 @@ func (gp *GoroutinePool) dispatch() {
 			select {
 			case task := <-gp.taskQueue:
 				// handle task blocking in queue
+				// gp.DecBlocking();
+				// w := gp.getWorker()
+				// w.TaskChannel <- task
 				gp.DecBlocking();
-				w := gp.getWorker()
-				w.TaskChannel <- task
-				// worker := <-gp.workerQueue
-				// worker.TaskChannel <- task
+				worker := <-gp.workerQueue
+				worker.TaskChannel <- task
 			case <- gp.closed:
 				log.Printf("Dispatch exits~~~")
 				return

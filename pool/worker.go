@@ -43,6 +43,7 @@ func (w *Worker) Run() {
     go func() {
 		// exit handler
 		defer func() {
+			log.Printf("yes")
 			w.Pool.DecRunning()
 			if p := recover(); p != nil {
 				if ph := w.Pool.option.PanicHandler; ph != nil {
@@ -52,20 +53,28 @@ func (w *Worker) Run() {
 				}
 			}
 		}()
+		
+		// 清理定时器
+		// if !w.isCore {
+		// 	timer1 := time.NewTimer(2 * time.Second)
+		// }
 
-		for task := range w.TaskChannel {
-			if task == nil {
-				// log.Println("worker exits")
-				w.Pool.DecRunning()
-				return
+		for {
+			select {
+			case task := w.TaskChannel:
+				if task == nil {
+					// log.Println("worker exits")
+					w.Pool.DecRunning()
+					return
+				}
+				err := w.completeTask(task)
+				if err!= nil {
+					log.Println("worker exits")
+					w.Pool.DecRunning()
+					return
+				}
+				w.Pool.FreeWorker(w)
 			}
-			err := w.completeTask(task)
-			if err!= nil {
-				// log.Println("worker exits")
-				w.Pool.DecRunning()
-				return
-			}
-			w.Pool.FreeWorker(w)
 		}
 		// // 弃用channel传递的方法，因为channel吞吐和select的操作效率并不高，并且一直监听taskqueue的效也是比较低的，改为放池中的状态
 		// // getTask()

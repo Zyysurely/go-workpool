@@ -52,7 +52,9 @@ func (w *Worker) Run() {
     go func() {
 		// exit handler
 		defer func() {
+			// log.Println("worker exits")
 			w.Pool.DecRunning()
+			WorkerNew.Put(w)
 			if p := recover(); p != nil {
 				if ph := w.Pool.option.PanicHandler; ph != nil {
 					ph(p)
@@ -69,13 +71,11 @@ func (w *Worker) Run() {
 
 		for task := range w.TaskChannel {
 			if task == nil {
-				// log.Println("worker exits")
-				w.Pool.DecRunning()
 				return
 			}
 			err := w.completeTask(task)
 			if err!= nil {
-				log.Println("worker exits")
+				// log.Printf("exit due to error: %+v", err)
 				w.Pool.DecRunning()
 				return
 			}

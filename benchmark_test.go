@@ -7,12 +7,14 @@ import (
 	pool "project/pool"
 	// "os/signal"
 	// "os"
-	"context"
+	// "context"
 	"log"
+
+	// "runtime"
 )
 
 var (
-	times = 10000
+	times = 1000000
 	DefaultGoroutinePoolSize = int64(200000)
 	DefaultBlockingTasks = int64(1000000)
 	DefaultExpiredTime = 10 * time.Second
@@ -47,11 +49,11 @@ func BenchmarkGoroutines(b *testing.B) {
 // with newly goroutinePool
 func BenchmarkGoroutinePool(b *testing.B) {
 	var wg sync.WaitGroup
-	ctx, cancel := context.WithCancel(context.Background())
-	defaultGoroutinePool.Ctx = ctx
-	// defer defaultGoroutinePool.Stop()
+	// ctx, cancel := context.WithCancel(context.Background())
+	// defaultGoroutinePool.Ctx = ctx
+	defer defaultGoroutinePool.Stop()
 
-	// b.StartTimer()
+	b.StartTimer()
 	for i := 0; i < b.N; i++ {
 		wg.Add(times)
 		for j := 0; j < times; j++ {
@@ -66,6 +68,5 @@ func BenchmarkGoroutinePool(b *testing.B) {
 		wg.Wait()
 	}
 	log.Printf("Pool exit signal recieved~~~")
-	cancel()
-	// b.StopTimer()
+	b.StopTimer()
 }

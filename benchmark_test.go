@@ -53,7 +53,7 @@ func BenchmarkGoroutinePool(b *testing.B) {
 	defaultGoroutinePool.Ctx = ctx
 	defer defaultGoroutinePool.Stop()
 
-	f, err := os.Create("cpu.pprof")
+	f, err := os.Create("cpu1.pprof")
     if err != nil {
         log.Fatal(err)
     }

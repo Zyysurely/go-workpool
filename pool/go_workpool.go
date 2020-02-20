@@ -28,7 +28,7 @@ type GoroutinePool struct {
 	taskQueue		chan *Task         // task channel
 	workCount		int64              // work routine num
 	blockCount      int64              // limit the throughput
-	// once			sync.Once          // ensure close once
+	once			sync.Once          // ensure close once
 	option			*OptionalPara	   // including 
 
 	closed          chan bool          // close signal

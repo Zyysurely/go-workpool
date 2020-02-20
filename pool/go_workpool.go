@@ -87,7 +87,7 @@ func (gp *GoroutinePool) FreeWorker(worker *Worker) error {
 
 // addWorker()
 func (gp *GoroutinePool) addWorker(core bool, task *Task) {
-	w := NewWorker(core, gp.Ctx, gp)
+	w := NewWorker(core, gp.closed, gp)
 	// gp.Lock()
 	// gp.workerQueue.add(w)
 	// gp.Unlock()
@@ -98,10 +98,13 @@ func (gp *GoroutinePool) addWorker(core bool, task *Task) {
 	w.Run()
 }
 
-// Stop()
+// Stop(), ensure to close once
 func (gp *GoroutinePool) Stop() {
 	atomic.StoreInt32(&gp.state, CLOSED)
-	gp.closed <- true
+	gp.once.Do(
+		func() {
+			close(gp.closed)
+		})
 }
 
 // TODO: clears expired workers

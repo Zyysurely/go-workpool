@@ -9,6 +9,8 @@ import (
 	// "os"
 	"context"
 	"log"
+	"runtime/pprof"
+	"os"
 )
 
 var (
@@ -50,6 +52,13 @@ func BenchmarkGoroutinePool(b *testing.B) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defaultGoroutinePool.Ctx = ctx
 	defer defaultGoroutinePool.Stop()
+
+	f, err := os.Create("cpu.pprof")
+    if err != nil {
+        log.Fatal(err)
+    }
+    pprof.StartCPUProfile(f)
+    defer pprof.StopCPUProfile()
 
 	// b.StartTimer()
 	for i := 0; i < b.N; i++ {

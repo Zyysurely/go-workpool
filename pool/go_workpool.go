@@ -198,14 +198,18 @@ func (gp *GoroutinePool) getWorker() *Worker{
 		gp.workerLocker.Unlock()
 		return w
 	}
-	// if gp.running() < gp.maxPoolSize {
-	// 	gp.Unlock();
-	// 	gp.addWorker(nil)
-	// }
-	// log.Printf("wait")
-	gp.cond.Wait()
-	// log.Printf("get")
-	w = gp.workerQueue.poll()
+	Retry:
+		// if gp.running() < gp.maxPoolSize {
+		// 	gp.Unlock();
+		// 	gp.addWorker(nil)
+		// }
+		// log.Printf("wait")
+		gp.cond.Wait()
+		// log.Printf("get")
+		w = gp.workerQueue.poll()
+		if w == nil {
+			goto Retry
+		}
 	gp.workerLocker.Unlock()
 	return w
 }

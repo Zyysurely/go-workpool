@@ -10,12 +10,14 @@ import (
 	// "context"
 	"log"
 
+	"os"
+	"runtime/pprof"
 	// "runtime"
 )
 
 var (
 	times = 1000000
-	DefaultGoroutinePoolSize = int64(200000)
+	DefaultGoroutinePoolSize = int64(20000)
 	DefaultBlockingTasks = int64(1000000)
 	DefaultExpiredTime = 10 * time.Second
 	DefaultOptions = &pool.OptionalPara {
@@ -48,6 +50,13 @@ func BenchmarkGoroutines(b *testing.B) {
 
 // with newly goroutinePool
 func BenchmarkGoroutinePool(b *testing.B) {
+	f, err := os.Create("cpu.pprof")
+    if err != nil {
+        log.Fatal(err)
+    }
+    pprof.StartCPUProfile(f)
+    defer pprof.StopCPUProfile()
+
 	var wg sync.WaitGroup
 	// ctx, cancel := context.WithCancel(context.Background())
 	// defaultGoroutinePool.Ctx = ctx

@@ -63,28 +63,34 @@ func NewGoroutinePool(cap int64, core int64, option *OptionalPara) *GoroutinePoo
 
 // submit task to the pool with error back
 func (gp *GoroutinePool) Submit(task *Task) error{
-	// if !gp.IsRunning() {
-	// 	return ErrPoolClosed
+	var w *Worker
+	if w = gp.retrieveWorker(); w == nil {
+		return ErrPoolOverload
+	}
+	w.TaskChannel <- task
+	return nil
+	// // if !gp.IsRunning() {
+	// // 	return ErrPoolClosed
+	// // }
+	// // <= corePoolSize
+	// if gp.running() < gp.corePoolSize {
+	// 	gp.addWorker(true, task)
+	// 	return nil
 	// }
-	// <= corePoolSize
-	if gp.running() < gp.corePoolSize {
-		gp.addWorker(true, task)
-		return nil
-	}
-	// add task to blockQueue
-	if !gp.option.Nonblocking && gp.option.MaxBlockingTasks != 0 && gp.blockCount < gp.option.MaxBlockingTasks {
-		gp.IncreBlocking();
-		w := gp.getWorker()
-		w.TaskChannel <- task
-		return nil
-	}
-	// blockQueue is full, max
-	if gp.running() < gp.maxPoolSize {
-		gp.addWorker(false, task)
-		return nil
-	}
-	// reject
-	return ErrPoolOverload
+	// // add task to blockQueue
+	// if !gp.option.Nonblocking && gp.option.MaxBlockingTasks != 0 && gp.blockCount < gp.option.MaxBlockingTasks {
+	// 	gp.IncreBlocking();
+	// 	w := gp.getWorker()
+	// 	w.TaskChannel <- task
+	// 	return nil
+	// }
+	// // blockQueue is full, max
+	// if gp.running() < gp.maxPoolSize {
+	// 	gp.addWorker(false, task)
+	// 	return nil
+	// }
+	// // reject
+	// return ErrPoolOverload
 }
 
 // freeWorker()
@@ -125,7 +131,7 @@ func (gp *GoroutinePool) Stop() {
 	log.Printf("#goroutines: %d\n", runtime.NumGoroutine())
 }
 
-// TODO: clears expired workers
+// clears expired workers
 func (gp *GoroutinePool) clearExpired() {
 	heartbeat := time.NewTicker(gp.option.ExpiryDuration)
 	defer heartbeat.Stop()
@@ -211,6 +217,52 @@ func (gp *GoroutinePool) getWorker() *Worker{
 			goto Retry
 		}
 	gp.workerLocker.Unlock()
+	return w
+}
+
+// retrieveWorker returns a available worker to run the tasks.
+func (gp *GoroutinePool) retrieveWorker() *Worker {
+	var w *Worker
+	spawnWorker := func() {
+		w = NewWorker(false, gp.Ctx, gp)
+		w.Run()
+		gp.increRunning()
+	}
+
+	gp.workerLocker.Lock()
+
+	w = gp.workerQueue.poll()
+	if w != nil {
+		gp.workerLocker.Unlock()
+	} else if gp.running() < gp.corePoolSize {
+		gp.workerLocker.Unlock()
+		spawnWorker()
+	} else {
+		if gp.option.Nonblocking {
+			gp.workerLocker.Unlock()
+			return nil
+		}
+	Reentry:
+		if gp.option.MaxBlockingTasks != 0 && gp.blockCount >= gp.option.MaxBlockingTasks {
+			gp.workerLocker.Unlock()
+			return nil
+		}
+		gp.blockCount++
+		gp.cond.Wait()
+		gp.blockCount--
+		if gp.running() == 0 {
+			gp.workerLocker.Unlock()
+			spawnWorker()
+			return w
+		}
+
+		w = gp.workerQueue.poll()
+		if w == nil {
+			goto Reentry
+		}
+
+		gp.workerLocker.Unlock()
+	}
 	return w
 }
 

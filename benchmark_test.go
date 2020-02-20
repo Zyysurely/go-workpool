@@ -17,7 +17,7 @@ import (
 
 var (
 	times = 1000000
-	DefaultGoroutinePoolSize = int64(20000)
+	DefaultGoroutinePoolSize = int64(200000)
 	DefaultBlockingTasks = int64(1000000)
 	DefaultExpiredTime = 10 * time.Second
 	DefaultOptions = &pool.OptionalPara {
@@ -76,6 +76,6 @@ func BenchmarkGoroutinePool(b *testing.B) {
 		}
 		wg.Wait()
 	}
-	log.Printf("Pool exit signal recieved~~~")
+	// log.Printf("Pool exit signal recieved~~~")
 	b.StopTimer()
 }

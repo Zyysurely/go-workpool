@@ -63,11 +63,6 @@ func (w *Worker) Run() {
 				}
 			}
 		}()
-		
-		// 清理定时器
-		// if !w.isCore {
-		// 	timer1 := time.NewTimer(2 * time.Second)
-		// }
 
 		for task := range w.TaskChannel {
 			if task == nil {
